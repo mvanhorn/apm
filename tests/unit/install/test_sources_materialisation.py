@@ -621,8 +621,12 @@ class TestCachedDependencySourceAcquire:
         assert result is not None
 
     def test_resolved_ref_none_creates_fallback_resolved_reference(self, tmp_path: Path) -> None:
-        """resolved_ref=None → a synthetic ResolvedReference is built."""
-        ctx = _make_ctx(targets=["copilot"])
+        """resolved_ref=None → a synthetic ResolvedReference keeps the lockfile SHA."""
+        locked_dep = MagicMock()
+        locked_dep.resolved_commit = "a" * 40
+        existing_lockfile = MagicMock()
+        existing_lockfile.get_dependency.return_value = locked_dep
+        ctx = _make_ctx(targets=["copilot"], existing_lockfile=existing_lockfile)
         dep_ref = _make_dep_ref(is_virtual=False, reference="feature-branch")
         install_path = tmp_path / "pkg"
         install_path.mkdir()
@@ -635,16 +639,14 @@ class TestCachedDependencySourceAcquire:
             patch("apm_cli.models.apm_package.APMPackage.from_apm_yml", return_value=mock_pkg),
             patch("apm_cli.models.validation.detect_package_type", return_value=(None, None)),
             patch("apm_cli.utils.content_hash.compute_package_hash", return_value="h"),
-            patch(
-                "apm_cli.install.sources.CachedDependencySource._resolve_cached_commit",
-                return_value="c",
-            ),
         ):
             source = self._make_source(ctx, dep_ref, install_path, resolved_ref=None)
             result = source.acquire()
 
         assert result is not None
-        # resolved_ref was None; the code builds a fallback - we just confirm no crash
+        assert result.package_info is not None
+        assert result.package_info.resolved_reference.resolved_commit == "a" * 40
+        assert result.package_info.resolved_reference.resolved_commit != "cached"
 
     def test_unpinned_dep_sets_delta(self, tmp_path: Path) -> None:
         """dep_ref.reference=None → deltas['unpinned']=1."""

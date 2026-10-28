@@ -504,13 +504,16 @@ class CachedDependencySource(DependencySource):
         if not cached_package.source:
             cached_package.source = dep_ref.repo_url
 
+        # Determine commit SHA before constructing the fallback reference so
+        # cached package metadata preserves a verified lockfile identity.
+        cached_commit = self._resolve_cached_commit()
         resolved_or_cached_ref = (
             resolved_ref
             if resolved_ref
             else ResolvedReference(
                 original_ref=dep_ref.reference or "default",
                 ref_type=GitReferenceType.BRANCH,
-                resolved_commit="cached",
+                resolved_commit=cached_commit or "cached",
                 ref_name=dep_ref.reference or "default",
             )
         )
@@ -529,11 +532,6 @@ class CachedDependencySource(DependencySource):
         depth = node.depth if node else 1
         resolved_by = locked_parent_identity(ctx, node)
         _is_dev = node.is_dev if node else False
-
-        # Determine commit SHA for the cached path. See _resolve_cached_commit
-        # for the invariant ("recorded SHA must match disk identity") and the
-        # priority rules (PR #1158 -- branch-ref drift fix).
-        cached_commit = self._resolve_cached_commit()
 
         # Determine if cached package came from registry
         _cached_registry = None
